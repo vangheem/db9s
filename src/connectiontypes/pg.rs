@@ -1,7 +1,8 @@
-use crate::ui::types::SelectionType;
+use crate::ui::types;
 use crate::{connectiontypes::base, data::Connection};
 use anyhow::Result;
 use chrono::{DateTime, NaiveDateTime, Utc};
+use log::debug;
 use mdsn::Dsn;
 use postgres::{Client, NoTls};
 use std::collections::HashMap;
@@ -10,53 +11,49 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 fn get_row_value(row: &postgres::Row, column: &str) -> Option<String> {
-    match row.try_get::<_, String>(column) {
-        Ok(value) => Some(value),
-        Err(_) => match row.try_get::<_, Uuid>(column) {
-            Ok(value) => Some(value.to_string()),
-            // Ok(value) => Some(value.to_string()),
-            Err(_) => match row.try_get::<_, NaiveDateTime>(column) {
-                Ok(value) => Some(value.to_string()),
-                Err(_) => match row.try_get::<_, DateTime<Utc>>(column) {
-                    Ok(value) => Some(value.to_string()),
-                    Err(_) => match row.try_get::<_, i32>(column) {
-                        Ok(value) => Some(value.to_string()),
-                        Err(_) => match row.try_get::<_, i64>(column) {
-                            Ok(value) => Some(value.to_string()),
-                            Err(_) => match row.try_get::<_, f32>(column) {
-                                Ok(value) => Some(value.to_string()),
-                                Err(_) => match row.try_get::<_, f64>(column) {
-                                    Ok(value) => Some(value.to_string()),
-                                    Err(_) => match row.try_get::<_, bool>(column) {
-                                        Ok(value) => Some(value.to_string()),
-                                        Err(_) => None,
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-            }, // Some(format!("Failed: {:?}", column)),
-        },
-    }
+    row.try_get::<_, String>(column)
+        .or_else(|_| {
+            row.try_get::<_, Uuid>(column)
+                .map(|value| value.to_string())
+        })
+        .or_else(|_| {
+            row.try_get::<_, NaiveDateTime>(column)
+                .map(|value| value.to_string())
+        })
+        .or_else(|_| {
+            row.try_get::<_, DateTime<Utc>>(column)
+                .map(|value| value.to_string())
+        })
+        .or_else(|_| row.try_get::<_, i32>(column).map(|value| value.to_string()))
+        .or_else(|_| row.try_get::<_, i64>(column).map(|value| value.to_string()))
+        .or_else(|_| row.try_get::<_, f32>(column).map(|value| value.to_string()))
+        .or_else(|_| row.try_get::<_, f64>(column).map(|value| value.to_string()))
+        .or_else(|_| {
+            row.try_get::<_, bool>(column)
+                .map(|value| value.to_string())
+        })
+        .ok()
 }
 
 pub struct PostgreSQLDatabase {
     name: String,
-    client: Arc<Mutex<Client>>,
-    selections: HashMap<SelectionType, Vec<String>>,
+    conn_string: String,
+    selections: HashMap<types::WindowTypeID, Vec<String>>,
+    query: Option<String>,
 }
+
 impl base::ConnectionType for PostgreSQLDatabase {
     fn list_tables(&self) -> Result<Vec<base::Table>> {
-        let raw_tables = self.client.lock().unwrap().query(
+        let raw_tables = self.get_client()?.query(
             "
 SELECT table_name
 FROM information_schema.tables
 WHERE table_schema = $1;",
             &[&self
-                .get_selection(SelectionType::Schema)
+                .get_selection(types::WindowTypeID::SCHEMAS)
                 .unwrap_or("public".to_string())],
         )?;
+        debug!("List tables query: {:?}", raw_tables);
 
         let tables: Vec<base::Table> = raw_tables
             .iter()
@@ -68,13 +65,10 @@ WHERE table_schema = $1;",
 
         Ok(tables)
     }
-    fn query_table(
-        &self,
-        sort_by: Option<String>,
-        limit: Option<u32>,
-    ) -> Result<base::QueryResult> {
+
+    fn default_query_string(&self) -> String {
         let mut columns = vec!["*".to_string()];
-        match self.selections.get(&SelectionType::Column) {
+        match self.selections.get(&types::WindowTypeID::COLUMNS) {
             Some(value) => {
                 if !value.is_empty() {
                     columns = value.clone();
@@ -82,18 +76,23 @@ WHERE table_schema = $1;",
             }
             None => {}
         }
-
-        let mut query = format!(
+        let query = format!(
             "SELECT {} FROM {}",
             columns.join(","),
-            self.get_selection(SelectionType::Table)
+            self.get_selection(types::WindowTypeID::TABLES)
                 .unwrap_or("_unselected_".to_string())
         );
-        if let Some(sort_by) = sort_by {
-            query = format!("{} ORDER BY {}", query, sort_by);
+        format!("{} LIMIT {}", query, 50)
+    }
+
+    fn query(&self) -> Result<base::QueryResult> {
+        let mut query = self.default_query_string();
+        if let Some(custom_query) = self.query.clone() {
+            query = custom_query;
         }
-        query = format!("{} LIMIT {}", query, limit.unwrap_or(100));
-        let raw_rows = self.client.lock().unwrap().query(query.as_str(), &[])?;
+        debug!("List tables query: {:?}", query);
+
+        let raw_rows = self.get_client()?.query(query.as_str(), &[])?;
         if raw_rows.is_empty() {
             return Ok(base::QueryResult {
                 columns: vec![],
@@ -134,7 +133,7 @@ WHERE table_schema = $1;",
         let query = "SELECT schema_name
 FROM information_schema.schemata;
 ";
-        let raw_schemas = self.client.lock().unwrap().query(query, &[])?;
+        let raw_schemas = self.get_client()?.query(query, &[])?;
         let rows: Vec<base::Schema> = raw_schemas
             .iter()
             .map(|r| base::Schema {
@@ -147,7 +146,7 @@ FROM information_schema.schemata;
 
     fn list_databases(&self) -> Result<Vec<base::DatabaseInfo>> {
         let query = "SELECT datname FROM pg_database;";
-        let raw_databases = self.client.lock().unwrap().query(query, &[])?;
+        let raw_databases = self.get_client()?.query(query, &[])?;
         let rows: Vec<base::DatabaseInfo> = raw_databases
             .iter()
             .map(|r| base::DatabaseInfo {
@@ -164,14 +163,14 @@ FROM information_schema.schemata;
 FROM information_schema.columns
 WHERE table_schema = $1 AND table_name = $2;"
         );
-        let raw_columns = self.client.lock().unwrap().query(
+        let raw_columns = self.get_client()?.query(
             query.as_str(),
             &[
                 &self
-                    .get_selection(SelectionType::Schema)
+                    .get_selection(types::WindowTypeID::SCHEMAS)
                     .unwrap_or("public".to_string()),
                 &self
-                    .get_selection(SelectionType::Table)
+                    .get_selection(types::WindowTypeID::TABLES)
                     .unwrap_or("public".to_string()),
             ],
         )?;
@@ -183,7 +182,8 @@ WHERE table_schema = $1 AND table_name = $2;"
 impl PostgreSQLDatabase {
     pub fn new(
         config: Connection,
-        selections: HashMap<SelectionType, Vec<String>>,
+        selections: HashMap<types::WindowTypeID, Vec<String>>,
+        query: Option<String>,
     ) -> Result<Self> {
         let dsn = Dsn::from_str(&config.dsn)?;
         let addr = dsn.addresses.first().unwrap();
@@ -196,15 +196,15 @@ impl PostgreSQLDatabase {
             dsn.password.unwrap_or("".to_string())
         );
 
-        let client = Client::connect(conn_string, NoTls)?;
         Ok(PostgreSQLDatabase {
             name: config.name,
-            client: Arc::new(Mutex::new(client)),
+            conn_string: conn_string.to_string(),
             selections,
+            query,
         })
     }
 
-    fn get_selection(&self, selection_type: SelectionType) -> Option<String> {
+    fn get_selection(&self, selection_type: types::WindowTypeID) -> Option<String> {
         if !self.selections.contains_key(&selection_type) {
             return None;
         }
@@ -213,5 +213,9 @@ impl PostgreSQLDatabase {
             return None;
         }
         Some(value[0].clone())
+    }
+
+    fn get_client(&self) -> Result<Client> {
+        return Ok(Client::connect(self.conn_string.as_str(), NoTls)?);
     }
 }

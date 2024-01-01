@@ -1,14 +1,14 @@
-use crate::connectiontypes::pg;
-use crate::{app::Application, connectiontypes::base::ConnectionType, ui::types::WindowType};
+use super::types;
+use crate::connectiontypes::base::ConnectionType;
+use crate::connectiontypes::utils::get_connection_type;
+use crate::data::Connection;
+use crate::{app::Application, connectiontypes::utils::feature_supported};
 use anyhow::Result;
+use log::{error, info};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
-    thread::sleep,
-    time::Duration,
 };
-
-use super::types::SelectionType;
 
 #[derive(Clone)]
 pub struct WindowDataRow {
@@ -22,9 +22,10 @@ pub struct WindowData {
 }
 
 pub struct LayoutStateInner {
-    pub active_window: WindowType,
-    pub selections: HashMap<SelectionType, Vec<String>>,
-    pub data: HashMap<WindowType, WindowData>,
+    pub active_window: types::WindowTypeID,
+    pub selections: HashMap<types::WindowTypeID, Vec<String>>,
+    pub custom_queries: HashMap<String, String>,
+    pub data: HashMap<types::WindowTypeID, WindowData>,
     pub app: Arc<Application>,
     pub databases: HashMap<String, Box<dyn ConnectionType>>,
 }
@@ -47,7 +48,7 @@ impl WindowDataRow {
     }
 }
 impl LayoutStateInner {
-    pub fn get_active(&self, selection: SelectionType) -> Option<String> {
+    pub fn get_active(&self, selection: types::WindowTypeID) -> Option<String> {
         match self.selections.get(&selection) {
             Some(selected) => {
                 if selected.len() > 0 {
@@ -59,14 +60,14 @@ impl LayoutStateInner {
             None => None,
         }
     }
-    pub fn get_selection(&self, selection: SelectionType) -> Option<Vec<String>> {
+    pub fn get_selection(&self, selection: types::WindowTypeID) -> Option<Vec<String>> {
         match self.selections.get(&selection) {
             Some(selected) => return Some(selected.clone()),
             None => None,
         }
     }
 
-    pub fn toggle_selection(&mut self, selection: SelectionType, value: String) -> &mut Self {
+    pub fn toggle_selection(&mut self, selection: types::WindowTypeID, value: String) -> &mut Self {
         if !self.selections.contains_key(&selection) {
             self.selections.insert(selection.clone(), vec![]);
         }
@@ -88,41 +89,59 @@ impl LayoutStateInner {
         self
     }
 
-    pub fn set_active(&mut self, selection: SelectionType, active: String) -> &mut Self {
+    pub fn set_active(&mut self, selection: types::WindowTypeID, active: String) -> &mut Self {
         self.selections.insert(selection.clone(), vec![active]);
         self
     }
 
-    pub fn del_active(&mut self, selection: SelectionType) -> &mut Self {
+    pub fn del_active(&mut self, selection: types::WindowTypeID) -> &mut Self {
         if self.selections.contains_key(&selection) {
             self.selections.remove(&selection);
         }
         self
     }
+
+    fn get_active_connection_config(&self) -> Result<Connection> {
+        let active_connection = self
+            .get_active(types::WindowTypeID::CONNECTIONS)
+            .unwrap_or("".to_string());
+        let connections = self.app.get_connections();
+        let conn = connections.iter().find(|c| c.id == active_connection);
+        if conn.is_none() {
+            return Err(anyhow::anyhow!("No active connection"));
+        }
+        return Ok(conn.unwrap().clone());
+    }
+    fn get_active_connection_type(&self) -> Result<Box<dyn ConnectionType>> {
+        let conn_info = self.get_active_connection_config()?;
+        let conn_type = get_connection_type(
+            conn_info.clone(),
+            self.selections.clone(),
+            self.custom_queries.clone(),
+        )?;
+        Ok(conn_type)
+    }
+    fn get_custom_query(&self) -> Option<(String, String)> {
+        let cc = self.get_active_connection_config();
+        if cc.is_err() {
+            return None;
+        }
+        let cc = cc.unwrap();
+        self.custom_queries
+            .get(&cc.id)
+            .map(|s| (cc.id, s.to_string()))
+    }
 }
 
 pub struct LayoutState {
-    positions: HashMap<WindowType, i32>,
+    positions: HashMap<types::WindowTypeID, i32>,
     pub inner: Arc<RwLock<LayoutStateInner>>,
 }
-
-fn get_active_connection(state: Arc<RwLock<LayoutStateInner>>) -> Result<pg::PostgreSQLDatabase> {
-    let active_connection = state
-        .read()
-        .unwrap()
-        .get_active(SelectionType::Connection)
-        .unwrap_or("".to_string());
-    let connections = state.read().unwrap().app.data.connections.clone();
-    let conn = connections.iter().find(|c| c.name == active_connection);
-    if conn.is_none() {
-        return Err(anyhow::anyhow!("No active connection"));
-    }
-    let conn = conn.unwrap();
-    let db = pg::PostgreSQLDatabase::new(conn.clone(), state.read().unwrap().selections.clone())?;
-    Ok(db)
-}
-
-fn update_state(state: Arc<RwLock<LayoutStateInner>>, window: WindowType, data: WindowData) {
+fn update_state(
+    state: Arc<RwLock<LayoutStateInner>>,
+    window: types::WindowTypeID,
+    data: WindowData,
+) {
     let mut state = state.write().unwrap();
     state.data.clear();
     state.data.insert(window, data);
@@ -131,15 +150,14 @@ fn update_state(state: Arc<RwLock<LayoutStateInner>>, window: WindowType, data: 
 fn pull_data(state: Arc<RwLock<LayoutStateInner>>) -> Result<()> {
     let window = state.read().unwrap().active_window.clone();
     match window {
-        WindowType::ConnectionList => {
+        types::WindowTypeID::CONNECTIONS => {
             let items = state
                 .read()
                 .unwrap()
                 .app
-                .data
-                .connections
+                .get_connections()
                 .iter()
-                .map(|c| WindowDataRow::from_str(&c.name))
+                .map(|c| WindowDataRow::new(c.id.clone(), vec![c.name.clone()]))
                 .collect();
             let mut state = state.write().unwrap();
             state.data.clear();
@@ -151,8 +169,8 @@ fn pull_data(state: Arc<RwLock<LayoutStateInner>>) -> Result<()> {
                 },
             );
         }
-        WindowType::TableList => {
-            let db = get_active_connection(Arc::clone(&state))?;
+        types::WindowTypeID::TABLES => {
+            let db = state.read().unwrap().get_active_connection_type()?;
             update_state(
                 state,
                 window,
@@ -166,8 +184,8 @@ fn pull_data(state: Arc<RwLock<LayoutStateInner>>) -> Result<()> {
                 },
             );
         }
-        WindowType::SchemaList => {
-            let db = get_active_connection(Arc::clone(&state))?;
+        types::WindowTypeID::SCHEMAS => {
+            let db = state.read().unwrap().get_active_connection_type()?;
             update_state(
                 state,
                 window,
@@ -181,8 +199,8 @@ fn pull_data(state: Arc<RwLock<LayoutStateInner>>) -> Result<()> {
                 },
             );
         }
-        WindowType::DatabaseList => {
-            let db = get_active_connection(Arc::clone(&state))?;
+        types::WindowTypeID::DATABASES => {
+            let db = state.read().unwrap().get_active_connection_type()?;
             update_state(
                 state,
                 window,
@@ -196,8 +214,8 @@ fn pull_data(state: Arc<RwLock<LayoutStateInner>>) -> Result<()> {
                 },
             );
         }
-        WindowType::ColumnList => {
-            let db = get_active_connection(Arc::clone(&state))?;
+        types::WindowTypeID::COLUMNS => {
+            let db = state.read().unwrap().get_active_connection_type()?;
             update_state(
                 state,
                 window,
@@ -211,9 +229,9 @@ fn pull_data(state: Arc<RwLock<LayoutStateInner>>) -> Result<()> {
                 },
             );
         }
-        WindowType::Query => {
-            let db = get_active_connection(Arc::clone(&state))?;
-            let results = db.query_table(None, None)?;
+        types::WindowTypeID::QUERY => {
+            let db = state.read().unwrap().get_active_connection_type()?;
+            let results = db.query()?;
             let rows = results
                 .rows
                 .iter()
@@ -227,6 +245,19 @@ fn pull_data(state: Arc<RwLock<LayoutStateInner>>) -> Result<()> {
                     )
                 })
                 .collect();
+
+            let cc_cq = state.read().unwrap().get_custom_query();
+            if let Some((cc_id, cq)) = cc_cq {
+                state
+                    .read()
+                    .unwrap()
+                    .app
+                    .data
+                    .write()
+                    .unwrap()
+                    .add_query_history(cc_id, cq);
+            }
+
             update_state(
                 state,
                 window,
@@ -236,15 +267,30 @@ fn pull_data(state: Arc<RwLock<LayoutStateInner>>) -> Result<()> {
                 },
             );
         }
+        types::WindowTypeID::HISTORY => {
+            let config = state.read().unwrap().get_active_connection_config()?;
+            let rows = config
+                .query_history
+                .iter()
+                .map(|q| {
+                    WindowDataRow::new(
+                        q.clone(),
+                        vec![q.clone().split("\n").collect::<Vec<_>>().join(" ")],
+                    )
+                })
+                .rev()
+                .collect();
+            update_state(
+                state,
+                window,
+                WindowData {
+                    columns: vec!["Query".to_string()],
+                    rows,
+                },
+            );
+        }
     }
     Ok(())
-}
-
-fn data_poller(state: Arc<RwLock<LayoutStateInner>>) {
-    loop {
-        pull_data(Arc::clone(&state));
-        sleep(Duration::from_millis(1000));
-    }
 }
 
 impl LayoutState {
@@ -252,15 +298,19 @@ impl LayoutState {
         let ls = LayoutState {
             positions: HashMap::new(),
             inner: Arc::new(RwLock::new(LayoutStateInner {
-                active_window: WindowType::ConnectionList,
+                active_window: types::WindowTypeID::CONNECTIONS,
                 selections: HashMap::new(),
                 data: HashMap::new(),
                 app: Arc::clone(&app),
                 databases: HashMap::new(),
+                custom_queries: HashMap::new(),
             })),
         };
-        pull_data(Arc::clone(&ls.inner));
-        let moved_state = Arc::clone(&ls.inner);
+        let result = pull_data(Arc::clone(&ls.inner));
+        if result.is_err() {
+            error!("Error: {:?}", result.err().unwrap());
+        }
+        // let moved_state = Arc::clone(&ls.inner);
         // std::thread::spawn(move || data_poller(moved_state));
         ls
     }
@@ -294,14 +344,14 @@ impl LayoutState {
             .insert(self.inner.read().unwrap().active_window, pos);
     }
 
-    pub fn change_window(&mut self, window: WindowType) {
+    pub fn change_window(&mut self, window: types::WindowTypeID) {
         let mut state = self.inner.write().unwrap();
         state.active_window = window;
         let moved_state: Arc<RwLock<LayoutStateInner>> = Arc::clone(&self.inner);
         std::thread::spawn(move || {
             let result = pull_data(moved_state);
             if result.is_err() {
-                println!("Error: {:?}", result.err().unwrap());
+                error!("Error: {:?}", result.err().unwrap());
             }
         });
     }
@@ -322,19 +372,42 @@ impl LayoutState {
         }
         let value = row_value.unwrap();
         let window = self.get_active_window();
-        match window {
-            WindowType::ConnectionList => {}
-            WindowType::TableList => {}
-            WindowType::SchemaList => {}
-            WindowType::DatabaseList => {}
-            WindowType::ColumnList => {
-                self.inner
-                    .write()
-                    .unwrap()
-                    .toggle_selection(SelectionType::Column, value);
-            }
-            WindowType::Query => {}
+        if window.selection_type() == types::ItemSelectionType::MULTI {
+            self.inner
+                .write()
+                .unwrap()
+                .toggle_selection(window.id(), value);
+        } else if window.selection_type() == types::ItemSelectionType::SINGLE {
+            self.inner.write().unwrap().set_active(window.id(), value);
         }
+    }
+
+    pub fn get_next_window(&self) -> Option<types::WindowTypeID> {
+        /*
+        Find next window for selection based on what is supported by the database
+        and what is expected app flow
+        */
+        let config = self.get_active_connection_config();
+        if config.is_err() {
+            return None;
+        }
+        let config = config.unwrap();
+        let mut window_id = Some(self.get_active_window().id());
+        while window_id.is_some() {
+            window_id = types::WINDOW_ORDER.get(&window_id.unwrap()).cloned();
+            if window_id.is_none() {
+                return None;
+            }
+            match feature_supported(config.clone(), window_id.unwrap()) {
+                Ok(supported) => {
+                    if supported {
+                        return window_id;
+                    }
+                }
+                Err(_) => {}
+            }
+        }
+        None
     }
 
     pub fn select_for_next_window(&mut self) {
@@ -344,52 +417,25 @@ impl LayoutState {
         }
         let value = row_value.unwrap();
         let window = self.get_active_window();
-        match window {
-            WindowType::ConnectionList => {
-                self.inner
-                    .write()
-                    .unwrap()
-                    .set_active(SelectionType::Connection, value)
-                    .del_active(SelectionType::Table)
-                    .del_active(SelectionType::Schema)
-                    .del_active(SelectionType::Database)
-                    .del_active(SelectionType::Column);
-                self.change_window(WindowType::TableList);
-            }
-            WindowType::TableList => {
-                self.inner
-                    .write()
-                    .unwrap()
-                    .set_active(SelectionType::Table, value)
-                    .del_active(SelectionType::Column);
-                self.change_window(WindowType::Query);
-            }
-            WindowType::SchemaList => {
-                self.inner
-                    .write()
-                    .unwrap()
-                    .set_active(SelectionType::Schema, value)
-                    .del_active(SelectionType::Table)
-                    .del_active(SelectionType::Column);
-                self.change_window(WindowType::TableList);
-            }
-            WindowType::DatabaseList => {
-                self.inner
-                    .write()
-                    .unwrap()
-                    .set_active(SelectionType::Database, value)
-                    .del_active(SelectionType::Table)
-                    .del_active(SelectionType::Schema)
-                    .del_active(SelectionType::Column);
-                self.change_window(WindowType::TableList);
-            }
-            WindowType::ColumnList => {}
-            WindowType::Query => {}
+
+        if window.id() == types::WindowTypeID::HISTORY {
+            let cc = self.get_active_connection_config().unwrap();
+            let mut data = self.inner.write().unwrap();
+            data.custom_queries.insert(cc.id.clone(), value.clone());
+        } else {
+            self.inner.write().unwrap().set_active(window.id(), value);
+        }
+        for clear in window.clears() {
+            self.inner.write().unwrap().del_active(clear);
+        }
+        let next_window = self.get_next_window();
+        if let Some(next) = next_window {
+            self.change_window(next);
         }
     }
 
-    pub fn get_active_window(&self) -> WindowType {
-        self.inner.read().unwrap().active_window.clone()
+    pub fn get_active_window(&self) -> types::WindowType {
+        types::get_window(self.inner.read().unwrap().active_window.clone())
     }
 
     pub fn get_window_data(&self) -> WindowData {
@@ -400,6 +446,47 @@ impl LayoutState {
                 columns: vec![],
                 rows: vec![],
             },
+        }
+    }
+
+    pub fn refresh(&mut self) {
+        let moved_state: Arc<RwLock<LayoutStateInner>> = Arc::clone(&self.inner);
+        std::thread::spawn(move || {
+            let result = pull_data(moved_state);
+            if result.is_err() {
+                error!("Error: {:?}", result.err().unwrap());
+            }
+        });
+    }
+
+    pub fn get_connections(&self) -> Vec<Connection> {
+        self.inner.read().unwrap().app.get_connections().clone()
+    }
+
+    pub fn get_active_connection_config(&self) -> Result<Connection> {
+        return self.inner.read().unwrap().get_active_connection_config();
+    }
+    pub fn get_active_connection_type(&self) -> Result<Box<dyn ConnectionType>> {
+        return self.inner.read().unwrap().get_active_connection_type();
+    }
+
+    pub fn get_current_query(&self) -> String {
+        let state = self.inner.read().unwrap();
+        let cc = self.get_active_connection_config().unwrap();
+        let ct = self.get_active_connection_type().unwrap();
+        match state.custom_queries.get(&cc.id) {
+            Some(query) => query.clone(),
+            None => ct.default_query_string(),
+        }
+    }
+
+    pub fn update_custom_query(&mut self, query: Option<String>) {
+        let cc = self.get_active_connection_config().unwrap();
+        let mut data = self.inner.write().unwrap();
+        if let Some(query) = query {
+            data.custom_queries.insert(cc.id.clone(), query);
+        } else if data.custom_queries.contains_key(&cc.id) {
+            data.custom_queries.remove(&cc.id);
         }
     }
 }

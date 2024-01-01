@@ -13,7 +13,7 @@ use std::{sync::Arc, sync::RwLock};
 use crate::ui::state::LayoutState;
 use ratatui::layout::{Direction, Layout};
 
-use super::types::SelectionType;
+use super::types;
 
 pub struct TopArea {
     app: Arc<Application>,
@@ -28,22 +28,26 @@ impl TopArea {
     pub fn render(&mut self, frame: &mut Frame, rect: Rect, event: Option<Event>) {
         let state = self.state.read().unwrap();
         let inner = state.inner.read().unwrap();
-        let row_column_pairs = vec![
-            ("Connection", SelectionType::Connection),
-            ("Database", SelectionType::Database),
-            ("Schema", SelectionType::Schema),
-            ("Table", SelectionType::Table),
-            ("Columns", SelectionType::Column),
-        ];
         let mut headers = Vec::new();
         let mut values = Vec::new();
-        for (name, selection_type) in row_column_pairs {
-            let value = inner.get_selection(selection_type);
+        for window_type in types::WINDOW_TYPES {
+            let value = inner.get_selection(window_type.id());
             if value.is_none() {
                 continue;
             }
-            headers.push(name);
-            values.push(value.unwrap().join(","));
+            let mut value = value.unwrap();
+            if value.is_empty() {
+                continue;
+            }
+            if window_type.id() == types::WindowTypeID::CONNECTIONS {
+                let conns = state.get_connections();
+                let conn = conns.iter().find(|c| c.id == value[0]);
+                if conn.is_some() {
+                    value = vec![conn.unwrap().name.clone()];
+                }
+            }
+            headers.push(window_type.title());
+            values.push(value.join(","));
         }
 
         let len = values.len();
@@ -52,13 +56,12 @@ impl TopArea {
             width = 100 / len;
         }
 
-        let table = Table::new(
-            vec![Row::new(values)],
-            vec![Constraint::Percentage(width as u16); len],
-        )
-        .header(Row::new(headers).style(Style::default().fg(Color::Yellow)))
-        .column_spacing(1)
-        .style(Style::default().fg(Color::White));
+        let widths = vec![Constraint::Percentage(width as u16); len];
+        let table = Table::new(vec![Row::new(values)])
+            .widths(&widths)
+            .header(Row::new(headers).style(Style::default().fg(Color::Yellow)))
+            .column_spacing(1)
+            .style(Style::default().fg(Color::White));
 
         let areas = Layout::default()
             .direction(Direction::Vertical)

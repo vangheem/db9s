@@ -1,14 +1,14 @@
 use crate::app::Application;
-use crossterm::event::{Event, KeyCode, KeyEvent};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::prelude::Constraint;
 use ratatui::style::{Color, Style};
-use ratatui::widgets::{Block, Borders, Cell, List, ListItem, ListState, Row, Table, TableState};
+use ratatui::widgets::{Block, Borders, Cell, Row, Table, TableState};
 use ratatui::{layout::Rect, Frame};
 use std::{sync::Arc, sync::RwLock};
 
 use crate::ui::state::LayoutState;
 
-use super::types::{SelectionType, WindowType};
+use super::types;
 
 pub struct MainArea {
     app: Arc<Application>,
@@ -39,6 +39,10 @@ impl MainArea {
                         state.set_position(current - 1);
                     }
                 }
+                KeyCode::Char('r') => {
+                    let mut state = self.state.write().unwrap();
+                    state.refresh();
+                }
                 KeyCode::Char(' ') => {
                     // spacebar pressed
                     let mut state = self.state.write().unwrap();
@@ -64,12 +68,13 @@ impl MainArea {
         let state = self.state.read().unwrap();
 
         let mut selected_rows = Vec::new();
-        if state.get_active_window() == WindowType::ColumnList {
+        let window = state.get_active_window();
+        if window.selection_type() == types::ItemSelectionType::MULTI {
             selected_rows = state
                 .inner
                 .read()
                 .unwrap()
-                .get_selection(SelectionType::Column)
+                .get_selection(window.id())
                 .unwrap_or(Vec::new());
         }
 
@@ -111,19 +116,10 @@ impl MainArea {
             .map(|_| Constraint::Percentage(column_size))
             .collect::<Vec<_>>();
 
-        let mut title = String::from("");
-        match state.get_active_window() {
-            WindowType::ConnectionList => title.push_str("Connections"),
-            WindowType::TableList => title.push_str("Tables"),
-            WindowType::Query => title.push_str("Query"),
-            WindowType::SchemaList => title.push_str("Schemas"),
-            WindowType::DatabaseList => title.push_str("Databases"),
-            WindowType::ColumnList => title.push_str("Columns"),
-        }
-
-        let table = Table::new(rows, widths)
+        let table = Table::new(rows)
+            .widths(&widths)
             .header(Row::new(wd.columns.clone()).style(Style::default().fg(Color::Yellow)))
-            .block(Block::default().title(title).borders(Borders::ALL))
+            .block(Block::default().title(window.title()).borders(Borders::ALL))
             .column_spacing(1)
             .style(Style::default().fg(Color::White))
             .highlight_style(Style::default().bg(Color::Gray));

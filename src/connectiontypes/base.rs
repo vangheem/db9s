@@ -32,7 +32,9 @@ pub struct QueryResult {
 pub trait ConnectionType: Send + Sync {
     fn list_tables(&self) -> Result<Vec<Table>>;
 
-    fn query_table(&self, sort_by: Option<String>, limit: Option<u32>) -> Result<QueryResult>;
+    fn query(&self) -> Result<QueryResult>;
+
+    fn default_query_string(&self) -> String;
 
     fn list_schemas(&self) -> Result<Vec<Schema>>;
 

@@ -23,7 +23,7 @@ pub fn run_ui(app: Application) -> Result<()> {
     let terminal = Arc::new(Mutex::new(Terminal::new(CrosstermBackend::new(stdout()))?));
     terminal.lock().unwrap().clear()?;
 
-    let mut layout_controller = layout::LayoutController::new(Arc::new(app));
+    let mut layout_controller = layout::LayoutController::new(app);
 
     loop {
         if !layout_controller.draw(Arc::clone(&terminal))? {
