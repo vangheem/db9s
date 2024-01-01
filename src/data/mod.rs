@@ -37,6 +37,14 @@ impl Connection {
             query_history: vec![],
         }
     }
+    pub fn new_with_id(name: String, dsn: String, id: String) -> Self {
+        Connection {
+            id,
+            name,
+            dsn,
+            query_history: vec![],
+        }
+    }
 }
 
 impl PersistentData {

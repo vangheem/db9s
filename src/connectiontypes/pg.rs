@@ -7,7 +7,6 @@ use mdsn::Dsn;
 use postgres::{Client, NoTls};
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 fn get_row_value(row: &postgres::Row, column: &str) -> Option<String> {

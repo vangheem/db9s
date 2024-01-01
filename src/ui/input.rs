@@ -269,7 +269,7 @@ impl InputReceiver for ConnectionInputReceiver {
                             if self.dsn_validated {
                                 self.dsn = self.input.clone();
                                 self.clear();
-                                let mut data = self.app.data.write().unwrap();
+                                let mut data = self.app.persistent_data.write().unwrap();
                                 data.add_connection(self.name.clone(), self.dsn.clone());
                                 self.state.write().unwrap().refresh();
                             }
@@ -374,7 +374,7 @@ impl InputReceiver for DeleteConnectionInputReceiver {
                     if self.active {
                         if c == 'y' {
                             self.clear();
-                            let mut data = self.app.data.write().unwrap();
+                            let mut data = self.app.persistent_data.write().unwrap();
                             let pos = self.state.read().unwrap().get_position();
                             data.connections.remove(pos as usize);
                             data.save();

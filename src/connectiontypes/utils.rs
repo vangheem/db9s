@@ -1,5 +1,6 @@
 use super::pg;
 use super::redis;
+use super::sqlite;
 use crate::data::Connection;
 use crate::ui::types;
 use crate::ui::types::WindowTypeID;
@@ -45,6 +46,10 @@ pub fn get_connection_type(
         return Ok(Box::new(redis::RedisConnectionType::new(
             conn, selections, query,
         )?));
+    } else if dsn.driver == "sqlite" {
+        return Ok(Box::new(sqlite::SQLiteConnectionType::new(
+            conn, selections, query,
+        )?));
     }
     Err(anyhow!("Unsupported DSN type"))
 }
@@ -57,6 +62,13 @@ pub fn feature_supported(conn: Connection, window_type: WindowTypeID) -> Result<
         return Ok([
             WindowTypeID::DATABASES,
             WindowTypeID::CONNECTIONS,
+            WindowTypeID::QUERY,
+        ]
+        .contains(&window_type));
+    } else if dsn.driver == "sqlite" {
+        return Ok([
+            WindowTypeID::CONNECTIONS,
+            WindowTypeID::TABLES,
             WindowTypeID::QUERY,
         ]
         .contains(&window_type));

@@ -105,12 +105,11 @@ impl LayoutStateInner {
         let active_connection = self
             .get_active(types::WindowTypeID::CONNECTIONS)
             .unwrap_or("".to_string());
-        let connections = self.app.get_connections();
-        let conn = connections.iter().find(|c| c.id == active_connection);
-        if conn.is_none() {
-            return Err(anyhow::anyhow!("No active connection"));
-        }
-        return Ok(conn.unwrap().clone());
+        let conn_info = self
+            .app
+            .get_connection(&active_connection)
+            .ok_or(anyhow::anyhow!("No active connection"))?;
+        return Ok(conn_info);
     }
     fn get_active_connection_type(&self) -> Result<Box<dyn ConnectionType>> {
         let conn_info = self.get_active_connection_config()?;
@@ -252,7 +251,7 @@ fn pull_data(state: Arc<RwLock<LayoutStateInner>>) -> Result<()> {
                     .read()
                     .unwrap()
                     .app
-                    .data
+                    .persistent_data
                     .write()
                     .unwrap()
                     .add_query_history(cc_id, cq);

@@ -3,7 +3,6 @@ use crate::{connectiontypes::base, data::Connection};
 use anyhow::Result;
 use redis;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
 pub struct RedisConnectionType {
     name: String,
