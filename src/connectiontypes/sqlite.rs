@@ -114,7 +114,25 @@ impl base::ConnectionType for SQLiteConnectionType {
     }
 
     fn list_columns(&self) -> Result<Vec<String>> {
-        Ok(vec![])
+        let columns_query = format!(
+            "PRAGMA table_info({})",
+            self.get_selection(types::WindowTypeID::TABLES)
+                .unwrap_or("_unselected_".to_string())
+        );
+        let conn = self.get_connection()?;
+        let mut stmt = conn.prepare(&columns_query)?;
+        let columns: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
+        let mut rows = stmt.query([])?;
+
+        info!("Columns: {:?}", columns);
+
+        let mut results = vec![];
+        while let Some(row) = rows.next()? {
+            let column_name: String = row.get("name")?;
+            results.push(column_name);
+        }
+
+        Ok(results)
     }
 }
 

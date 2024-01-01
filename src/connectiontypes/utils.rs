@@ -69,6 +69,7 @@ pub fn feature_supported(conn: Connection, window_type: WindowTypeID) -> Result<
         return Ok([
             WindowTypeID::CONNECTIONS,
             WindowTypeID::TABLES,
+            WindowTypeID::COLUMNS,
             WindowTypeID::QUERY,
         ]
         .contains(&window_type));
