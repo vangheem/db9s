@@ -8,6 +8,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Row, Table},
     Frame,
 };
+use std::collections::HashMap;
 use std::{sync::Arc, sync::RwLock};
 
 use crate::ui::state::LayoutState;
@@ -50,33 +51,63 @@ impl TopArea {
             values.push(value.join(","));
         }
 
-        let len = values.len();
-        let mut width = 100;
-        if len > 0 {
-            width = 100 / len;
-        }
+        let shortcuts = vec![
+            ("j", "Down"),
+            ("k", "Up"),
+            ("r", "Refresh"),
+            ("space", "Select"),
+            ("enter", "Open"),
+            (":", "Command"),
+            ("n", "New"),
+            ("d", "Delete"),
+            ("e", "Edit"),
+            ("Esc", "Cancel"),
+            ("r", "Refresh"),
+            ("Control+r", "Refresh"),
+            ("Control+s", "Save"),
+        ];
 
-        let widths = vec![Constraint::Percentage(width as u16); len];
+        let shortcuts_table = Table::new(
+            shortcuts
+                .iter()
+                .map(|(k, v)| Row::new(vec![Text::raw(k.to_string()), Text::raw(v.to_string())]))
+                .collect::<Vec<_>>(),
+        )
+        .widths(&[Constraint::Percentage(50), Constraint::Percentage(50)]);
+
+        let commands = vec![
+            "connections",
+            "databases",
+            "tables",
+            "schemas",
+            "columns",
+            "query",
+        ];
+        let commands_table = Table::new(
+            commands
+                .iter()
+                .map(|c| Row::new(vec![Text::raw(c.to_string())]))
+                .collect::<Vec<_>>(),
+        )
+        .widths(&[Constraint::Percentage(100)]);
+
         let table = Table::new(vec![Row::new(values)])
-            .widths(&widths)
+            .widths(&[Constraint::Percentage(50), Constraint::Percentage(50)])
             .header(Row::new(headers).style(Style::default().fg(Color::Yellow)))
             .column_spacing(1)
             .style(Style::default().fg(Color::White));
 
         let areas = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Min(2), Constraint::Min(2)])
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(40),
+                Constraint::Percentage(40),
+                Constraint::Percentage(20),
+            ])
             .split(rect);
 
         frame.render_widget(table, areas[0]);
-        frame.render_widget(
-            Paragraph::new(vec![
-                Line::from("Keys: j, k, space, enter, :".to_string()),
-                Line::from(
-                    "Command: connections, databases, tables, schemas, columns, query".to_string(),
-                ),
-            ]),
-            areas[1],
-        );
+        frame.render_widget(shortcuts_table, areas[1]);
+        frame.render_widget(commands_table, areas[2]);
     }
 }
