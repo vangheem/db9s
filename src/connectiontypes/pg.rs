@@ -36,7 +36,7 @@ fn get_row_value(row: &postgres::Row, column: &str) -> Option<String> {
 
 pub struct PostgreSQLDatabase {
     name: String,
-    conn_string: String,
+    dsn: Dsn,
     selections: HashMap<types::WindowTypeID, Vec<String>>,
     query: Option<String>,
 }
@@ -185,19 +185,9 @@ impl PostgreSQLDatabase {
         query: Option<String>,
     ) -> Result<Self> {
         let dsn = Dsn::from_str(&config.dsn)?;
-        let addr = dsn.addresses.first().unwrap();
-        let conn_string = &format!(
-            "host={} port={} dbname={} user={} password={} ",
-            addr.clone().host.unwrap_or("localhost".to_string()),
-            addr.port.unwrap_or(5432),
-            dsn.subject.unwrap_or("postgres".to_string()),
-            dsn.username.unwrap_or("postgres".to_string()),
-            dsn.password.unwrap_or("".to_string())
-        );
-
         Ok(PostgreSQLDatabase {
             name: config.name,
-            conn_string: conn_string.to_string(),
+            dsn: dsn,
             selections,
             query,
         })
@@ -215,6 +205,16 @@ impl PostgreSQLDatabase {
     }
 
     fn get_client(&self) -> Result<Client> {
-        return Ok(Client::connect(self.conn_string.as_str(), NoTls)?);
+        let addr = self.dsn.addresses.first().unwrap();
+        let conn_string = &format!(
+            "host={} port={} dbname={} user={} password={} ",
+            addr.clone().host.unwrap_or("localhost".to_string()),
+            addr.port.unwrap_or(5432),
+            self.get_selection(types::WindowTypeID::DATABASES)
+                .unwrap_or(self.dsn.subject.clone().unwrap_or("postgres".to_string())),
+            self.dsn.username.clone().unwrap_or("postgres".to_string()),
+            self.dsn.password.clone().unwrap_or("".to_string())
+        );
+        return Ok(Client::connect(conn_string.as_str(), NoTls)?);
     }
 }

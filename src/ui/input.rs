@@ -204,7 +204,6 @@ struct ConnectionInputReceiver {
     input: String,
     name: String,
     name_validated: bool,
-    dsn: String,
     dsn_validated: bool,
     dsn_validation_error: String,
     active: bool,
@@ -216,7 +215,6 @@ impl ConnectionInputReceiver {
     pub fn new(app: Arc<Application>, state: Arc<RwLock<LayoutState>>) -> ConnectionInputReceiver {
         ConnectionInputReceiver {
             name: String::new(),
-            dsn: String::new(),
             input: String::new(),
             active: false,
             name_validated: false,
@@ -237,7 +235,7 @@ impl InputReceiver for ConnectionInputReceiver {
                         self.input.push(c);
                         if self.name.is_empty() {
                             self.name_validated = self.input.len() > 0;
-                        } else if self.dsn.is_empty() {
+                        } else {
                             (self.dsn_validated, self.dsn_validation_error) =
                                 validate_dsn(self.input.clone());
                         }
@@ -265,12 +263,13 @@ impl InputReceiver for ConnectionInputReceiver {
                                 self.name = self.input.clone();
                                 self.input.clear();
                             }
-                        } else if self.dsn.is_empty() {
+                        } else if !self.input.is_empty() {
                             if self.dsn_validated {
-                                self.dsn = self.input.clone();
+                                let dsn = self.input.clone();
+                                let name = self.name.clone();
                                 self.clear();
                                 let mut data = self.app.persistent_data.write().unwrap();
-                                data.add_connection(self.name.clone(), self.dsn.clone());
+                                data.add_connection(name, dsn);
                                 self.state.write().unwrap().refresh();
                             }
                         }
@@ -291,7 +290,6 @@ impl InputReceiver for ConnectionInputReceiver {
     }
     fn clear(&mut self) {
         self.name.clear();
-        self.dsn.clear();
         self.input.clear();
         self.name_validated = false;
         self.dsn_validated = false;
