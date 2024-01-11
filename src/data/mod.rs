@@ -1,4 +1,6 @@
+use mdsn::Dsn;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 use std::io::prelude::*;
 use std::path::PathBuf;
@@ -44,6 +46,33 @@ impl Connection {
             dsn,
             query_history: vec![],
         }
+    }
+
+    pub fn get_addr(&self) -> String {
+        let dsn = Dsn::from_str(&self.dsn);
+        if dsn.is_err() {
+            return String::from("unknown");
+        }
+        let dsn = dsn.unwrap();
+        let addr = dsn.addresses.first();
+        if addr.is_none() {
+            return String::from("unknown");
+        }
+        let addr = addr.unwrap();
+        return format!(
+            "{}:{}",
+            addr.clone().host.unwrap_or("unset".to_string()),
+            addr.port.unwrap_or(0)
+        );
+    }
+
+    pub fn get_type(&self) -> String {
+        let dsn = Dsn::from_str(&self.dsn);
+        if dsn.is_err() {
+            return String::from("unknown");
+        }
+        let dsn = dsn.unwrap();
+        return dsn.driver;
     }
 }
 

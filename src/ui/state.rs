@@ -157,7 +157,7 @@ fn safely_pull_data(state: Arc<RwLock<LayoutStateInner>>) {
         let err = result.err().unwrap();
         state.error = Some(err.to_string());
         error!("Error: {:?}", err);
-    }else {
+    } else {
         state.error = None;
     }
 }
@@ -172,14 +172,23 @@ fn pull_data(state: Arc<RwLock<LayoutStateInner>>) -> Result<()> {
                 .app
                 .get_connections()
                 .iter()
-                .map(|c| WindowDataRow::new(c.id.clone(), vec![c.name.clone()]))
+                .map(|c| {
+                    WindowDataRow::new(
+                        c.id.clone(),
+                        vec![c.name.clone(), c.get_type(), c.get_addr()],
+                    )
+                })
                 .collect();
             let mut state = state.write().unwrap();
             state.data.clear();
             state.data.insert(
                 window,
                 WindowData {
-                    columns: vec!["Name".to_string()],
+                    columns: vec![
+                        "Name".to_string(),
+                        "Type".to_string(),
+                        "Address".to_string(),
+                    ],
                     rows: items,
                 },
             );
@@ -320,7 +329,7 @@ impl LayoutState {
                 databases: HashMap::new(),
                 custom_queries: HashMap::new(),
                 dirty: true,
-                error: None
+                error: None,
             })),
         };
         safely_pull_data(Arc::clone(&ls.inner));
