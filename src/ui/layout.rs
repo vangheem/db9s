@@ -6,7 +6,7 @@ use ratatui::{
 };
 use std::{io::Result, sync::Arc, sync::Mutex, sync::RwLock};
 
-use super::{input::InputBar, main::MainArea, top::TopArea, status::StatusArea};
+use super::{input::InputBar, main::MainArea, status::StatusArea, top::TopArea};
 use crate::ui::state::LayoutState;
 
 pub struct LayoutController {
@@ -15,7 +15,7 @@ pub struct LayoutController {
     input_bar: InputBar,
     main_area: MainArea,
     top_area: TopArea,
-    status_area: StatusArea
+    status_area: StatusArea,
 }
 
 impl LayoutController {
@@ -28,7 +28,7 @@ impl LayoutController {
             top_area: TopArea::new(Arc::clone(&app), Arc::clone(&state)),
             status_area: StatusArea::new(Arc::clone(&app), Arc::clone(&state)),
             app,
-            state
+            state,
         }
     }
 
@@ -67,7 +67,7 @@ impl LayoutController {
             let areas = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
-                    Constraint::Length(4),
+                    Constraint::Length(5),
                     Constraint::Length(self.input_bar.layout_size()),
                     Constraint::Min(1),
                     Constraint::Length(self.status_area.layout_size()),

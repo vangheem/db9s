@@ -17,7 +17,7 @@ use crate::ui::types;
 
 trait InputReceiver {
     fn receive_input(&mut self, event: Event) -> bool;
-    fn active(&self) -> bool;
+    fn active(&self, event: Option<Event>) -> bool;
     fn clear(&mut self);
     fn layout_size(&self) -> u16;
     fn render(&mut self, frame: &mut Frame, rect: Rect);
@@ -173,7 +173,7 @@ impl InputReceiver for CommandInputReceiver {
         }
         false
     }
-    fn active(&self) -> bool {
+    fn active(&self, event: Option<Event>) -> bool {
         self.active
     }
     fn clear(&mut self) {
@@ -285,7 +285,7 @@ impl InputReceiver for ConnectionInputReceiver {
         }
         false
     }
-    fn active(&self) -> bool {
+    fn active(&self, event: Option<Event>) -> bool {
         self.active
     }
     fn clear(&mut self) {
@@ -400,7 +400,7 @@ impl InputReceiver for DeleteConnectionInputReceiver {
         }
         false
     }
-    fn active(&self) -> bool {
+    fn active(&self, event: Option<Event>) -> bool {
         self.active
     }
     fn clear(&mut self) {
@@ -514,7 +514,7 @@ impl<'a> InputReceiver for EditQueryInputReceiver<'a> {
         }
         false
     }
-    fn active(&self) -> bool {
+    fn active(&self, event: Option<Event>) -> bool {
         self.active
     }
     fn clear(&mut self) {
@@ -528,10 +528,68 @@ impl<'a> InputReceiver for EditQueryInputReceiver<'a> {
         self.textarea.set_block(
             Block::default()
                 .borders(Borders::ALL)
-                .style(Style::default())
+                .style(Style::default().fg(Color::White))
                 .title("Edit Query"),
         );
         frame.render_widget(self.textarea.widget(), rect);
+    }
+
+    fn layout_size(&self) -> u16 {
+        5
+    }
+}
+
+struct ViewQueryInputReceiver {
+    active: bool,
+    app: Arc<Application>,
+    state: Arc<RwLock<LayoutState>>,
+}
+
+impl ViewQueryInputReceiver {
+    pub fn new(app: Arc<Application>, state: Arc<RwLock<LayoutState>>) -> ViewQueryInputReceiver {
+        ViewQueryInputReceiver {
+            active: false,
+            app,
+            state,
+        }
+    }
+}
+
+impl<'a> InputReceiver for ViewQueryInputReceiver {
+    fn receive_input(&mut self, event: Event) -> bool {
+        false
+    }
+    fn active(&self, event: Option<Event>) -> bool {
+        if event.is_some() {
+            return false;
+        }
+        let state = self.state.read().unwrap();
+        let aw = state.get_active_window();
+        if aw.id() == types::WindowTypeID::QUERY {
+            return true;
+        }
+        false
+    }
+    fn clear(&mut self) {
+        //
+    }
+
+    fn render(&mut self, frame: &mut Frame, rect: Rect) {
+        let state = self.state.read().unwrap();
+        let text = state.get_current_query();
+        let para = Paragraph::new(
+            text.split("\n")
+                .into_iter()
+                .map(|s| Line::from(Span::styled(s, Style::default().fg(Color::Gray))))
+                .collect::<Vec<_>>(),
+        )
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .style(Style::default())
+                .title("Query"),
+        );
+        frame.render_widget(para, rect);
     }
 
     fn layout_size(&self) -> u16 {
@@ -565,6 +623,10 @@ impl InputBar {
                     Arc::clone(&app),
                     Arc::clone(&state),
                 )),
+                Box::new(ViewQueryInputReceiver::new(
+                    Arc::clone(&app),
+                    Arc::clone(&state),
+                )),
             ],
             app,
             state,
@@ -573,7 +635,7 @@ impl InputBar {
 
     fn handle_event(&mut self, event: Event) {
         for receiver in self.input_receivers.iter_mut() {
-            if receiver.active() {
+            if receiver.active(Some(event.clone())) {
                 receiver.receive_input(event.clone());
                 return;
             }
@@ -587,7 +649,7 @@ impl InputBar {
 
     pub fn active(&self) -> bool {
         for receiver in self.input_receivers.iter() {
-            if receiver.active() {
+            if receiver.active(None) {
                 return true;
             }
         }
@@ -596,7 +658,7 @@ impl InputBar {
 
     pub fn layout_size(&self) -> u16 {
         for receiver in self.input_receivers.iter() {
-            if receiver.active() {
+            if receiver.active(None) {
                 return receiver.layout_size();
             }
         }
@@ -609,7 +671,7 @@ impl InputBar {
         }
 
         for receiver in self.input_receivers.iter_mut() {
-            if receiver.active() {
+            if receiver.active(None) {
                 receiver.render(frame, rect);
                 return;
             }

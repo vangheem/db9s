@@ -1,6 +1,8 @@
 use crate::app::Application;
+use chrono::format;
 use crossterm::event::Event;
-use ratatui::prelude::{Constraint};
+use ratatui::prelude::Constraint;
+use ratatui::text::{Line, Span};
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
@@ -11,7 +13,7 @@ use ratatui::{
 use std::{sync::Arc, sync::RwLock};
 
 use crate::ui::state::LayoutState;
-use ratatui::layout::{Direction, Layout};
+use ratatui::layout::{Alignment, Direction, Layout};
 
 use super::types;
 
@@ -20,12 +22,90 @@ pub struct TopArea {
     state: Arc<RwLock<LayoutState>>,
 }
 
+static SHORTCUTS: [(&str, &str); 13] = [
+    ("j", "Down"),
+    ("k", "Up"),
+    ("r", "Refresh"),
+    ("space", "Select"),
+    ("enter", "Open"),
+    (":", "Command"),
+    ("n", "New"),
+    ("d", "Delete"),
+    ("e", "Edit"),
+    ("Esc", "Cancel"),
+    ("r", "Refresh"),
+    ("Control+r", "Refresh"),
+    ("Control+s", "Save"),
+];
+static COMMNDS: [&str; 7] = [
+    "connections",
+    "databases",
+    "tables",
+    "schemas",
+    "columns",
+    "query",
+    "history",
+];
+
 impl TopArea {
     pub fn new(app: Arc<Application>, state: Arc<RwLock<LayoutState>>) -> TopArea {
         TopArea { app, state }
     }
 
-    pub fn render(&mut self, frame: &mut Frame, rect: Rect, event: Option<Event>) {
+    fn get_shortcuts(&self, split: usize, part: usize) -> Table {
+        // let current_window = self.state.read().unwrap().get_active_window();
+        let mut take = SHORTCUTS.len() / split;
+        let skip = take * part;
+        if part == split - 1 {
+            take += SHORTCUTS.len() % split;
+        }
+        Table::new(
+            SHORTCUTS
+                .iter()
+                .skip(skip)
+                .take(take)
+                .map(|(k, v)| {
+                    Row::new(vec![
+                        Line::from(Span::styled(
+                            format!("<{}>: ", k),
+                            Style::default().fg(Color::Magenta),
+                        ))
+                        .alignment(Alignment::Right),
+                        Line::from(Span::styled(
+                            format!("{}", v),
+                            Style::default().fg(Color::Gray),
+                        )),
+                    ])
+                })
+                .collect::<Vec<_>>(),
+        )
+        .widths(&[Constraint::Percentage(30), Constraint::Percentage(70)])
+    }
+
+    fn get_commands(&self, split: usize, part: usize) -> Table {
+        let mut take = COMMNDS.len() / split;
+        let skip = take * part;
+        if part == split - 1 {
+            take += COMMNDS.len() % split;
+        }
+        Table::new(
+            COMMNDS
+                .iter()
+                .skip(skip)
+                .take(take)
+                .map(|c| {
+                    Row::new(vec![Line::from(vec![
+                        Span::styled(format!("["), Style::default().fg(Color::Yellow)),
+                        Span::styled(format!("{}", c), Style::default().fg(Color::Green)),
+                        Span::styled(format!("]"), Style::default().fg(Color::Yellow)),
+                    ])])
+                })
+                .collect::<Vec<_>>(),
+        )
+        .widths(&[Constraint::Percentage(100)])
+    }
+
+    fn get_selection_table(&self) -> Table {
         let state = self.state.read().unwrap();
         let inner = state.inner.read().unwrap();
         let mut headers = Vec::new();
@@ -50,63 +130,59 @@ impl TopArea {
             values.push(value.join(","));
         }
 
-        let shortcuts = vec![
-            ("j", "Down"),
-            ("k", "Up"),
-            ("r", "Refresh"),
-            ("space", "Select"),
-            ("enter", "Open"),
-            (":", "Command"),
-            ("n", "New"),
-            ("d", "Delete"),
-            ("e", "Edit"),
-            ("Esc", "Cancel"),
-            ("r", "Refresh"),
-            ("Control+r", "Refresh"),
-            ("Control+s", "Save"),
-        ];
-
-        let shortcuts_table = Table::new(
-            shortcuts
+        Table::new(
+            headers
                 .iter()
-                .map(|(k, v)| Row::new(vec![Text::raw(k.to_string()), Text::raw(v.to_string())]))
+                .zip(values.iter())
+                .map(|(h, v)| {
+                    Row::new(vec![
+                        Line::from(Span::styled(
+                            format!("{}: ", h),
+                            Style::default().fg(Color::Yellow),
+                        ))
+                        .alignment(Alignment::Right),
+                        Line::from(Span::styled(
+                            v.to_string(),
+                            Style::default().fg(Color::White),
+                        )),
+                    ])
+                })
                 .collect::<Vec<_>>(),
         )
-        .widths(&[Constraint::Percentage(50), Constraint::Percentage(50)]);
+        .widths(&[Constraint::Percentage(30), Constraint::Percentage(70)])
+        .column_spacing(1)
+        .style(Style::default().fg(Color::White))
+    }
 
-        let commands = vec![
-            "connections",
-            "databases",
-            "tables",
-            "schemas",
-            "columns",
-            "query",
-        ];
-        let commands_table = Table::new(
-            commands
-                .iter()
-                .map(|c| Row::new(vec![Text::raw(c.to_string())]))
-                .collect::<Vec<_>>(),
-        )
-        .widths(&[Constraint::Percentage(100)]);
+    pub fn render(&mut self, frame: &mut Frame, rect: Rect, event: Option<Event>) {
+        let shortcuts_table1 = self.get_shortcuts(3, 0);
+        let shortcuts_table2 = self.get_shortcuts(3, 1);
+        let shortcuts_table3 = self.get_shortcuts(3, 2);
 
-        let table = Table::new(vec![Row::new(values)])
-            .widths(&[Constraint::Percentage(50), Constraint::Percentage(50)])
-            .header(Row::new(headers).style(Style::default().fg(Color::Yellow)))
-            .column_spacing(1)
-            .style(Style::default().fg(Color::White));
+        let commands_table1 = self.get_commands(2, 0);
+        let commands_table2 = self.get_commands(2, 1);
+
+        let selection_table = self.get_selection_table();
 
         let areas = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(40),
-                Constraint::Percentage(40),
-                Constraint::Percentage(20),
+                Constraint::Percentage(25),
+                Constraint::Percentage(10),
+                Constraint::Percentage(10),
+                Constraint::Percentage(5),
+                Constraint::Percentage(15),
+                Constraint::Percentage(15),
+                Constraint::Percentage(15),
             ])
             .split(rect);
 
-        frame.render_widget(table, areas[0]);
-        frame.render_widget(shortcuts_table, areas[1]);
-        frame.render_widget(commands_table, areas[2]);
+        frame.render_widget(selection_table, areas[0]);
+        frame.render_widget(commands_table1, areas[1]);
+        frame.render_widget(commands_table2, areas[2]);
+        // leave out spacer
+        frame.render_widget(shortcuts_table1, areas[4]);
+        frame.render_widget(shortcuts_table2, areas[5]);
+        frame.render_widget(shortcuts_table3, areas[6]);
     }
 }
