@@ -16,6 +16,7 @@ pub mod main;
 pub mod state;
 pub mod top;
 pub mod types;
+pub mod status;
 
 pub fn run_ui(app: Application) -> Result<()> {
     stdout().execute(EnterAlternateScreen)?;

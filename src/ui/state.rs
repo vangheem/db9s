@@ -28,6 +28,8 @@ pub struct LayoutStateInner {
     pub data: HashMap<types::WindowTypeID, WindowData>,
     pub app: Arc<Application>,
     pub databases: HashMap<String, Box<dyn ConnectionType>>,
+    pub dirty: bool,
+    pub error: Option<String>,
 }
 
 impl WindowDataRow {
@@ -144,6 +146,20 @@ fn update_state(
     let mut state = state.write().unwrap();
     state.data.clear();
     state.data.insert(window, data);
+    state.dirty = true;
+}
+
+fn safely_pull_data(state: Arc<RwLock<LayoutStateInner>>) {
+    let result = pull_data(Arc::clone(&state));
+    let mut state = state.write().unwrap();
+    state.dirty = true;
+    if result.is_err() {
+        let err = result.err().unwrap();
+        state.error = Some(err.to_string());
+        error!("Error: {:?}", err);
+    }else {
+        state.error = None;
+    }
 }
 
 fn pull_data(state: Arc<RwLock<LayoutStateInner>>) -> Result<()> {
@@ -303,19 +319,24 @@ impl LayoutState {
                 app: Arc::clone(&app),
                 databases: HashMap::new(),
                 custom_queries: HashMap::new(),
+                dirty: true,
+                error: None
             })),
         };
-        let result = pull_data(Arc::clone(&ls.inner));
-        if result.is_err() {
-            error!("Error: {:?}", result.err().unwrap());
-        }
-        // let moved_state = Arc::clone(&ls.inner);
-        // std::thread::spawn(move || data_poller(moved_state));
+        safely_pull_data(Arc::clone(&ls.inner));
         ls
     }
 
     fn clear(&mut self) {
         self.inner.write().unwrap().data.clear();
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.inner.read().unwrap().dirty
+    }
+
+    pub fn set_dirty(&mut self, dirty: bool) {
+        self.inner.write().unwrap().dirty = dirty;
     }
 
     pub fn get_position(&self) -> i32 {
@@ -329,6 +350,7 @@ impl LayoutState {
     }
 
     pub fn set_position(&mut self, pos: i32) {
+        self.set_dirty(true);
         let aw = self.inner.read().unwrap().active_window;
         if pos < 0 {
             self.positions.insert(aw, -1);
@@ -344,14 +366,12 @@ impl LayoutState {
     }
 
     pub fn change_window(&mut self, window: types::WindowTypeID) {
+        self.set_dirty(true);
         let mut state = self.inner.write().unwrap();
         state.active_window = window;
         let moved_state: Arc<RwLock<LayoutStateInner>> = Arc::clone(&self.inner);
         std::thread::spawn(move || {
-            let result = pull_data(moved_state);
-            if result.is_err() {
-                error!("Error: {:?}", result.err().unwrap());
-            }
+            safely_pull_data(moved_state);
         });
     }
 
@@ -369,6 +389,7 @@ impl LayoutState {
         if row_value.is_none() {
             return;
         }
+        self.set_dirty(true);
         let value = row_value.unwrap();
         let window = self.get_active_window();
         if window.selection_type() == types::ItemSelectionType::MULTI {
@@ -414,6 +435,7 @@ impl LayoutState {
         if row_value.is_none() {
             return;
         }
+        self.set_dirty(true);
         let value = row_value.unwrap();
         let window = self.get_active_window();
 
@@ -451,10 +473,7 @@ impl LayoutState {
     pub fn refresh(&mut self) {
         let moved_state: Arc<RwLock<LayoutStateInner>> = Arc::clone(&self.inner);
         std::thread::spawn(move || {
-            let result = pull_data(moved_state);
-            if result.is_err() {
-                error!("Error: {:?}", result.err().unwrap());
-            }
+            safely_pull_data(moved_state);
         });
     }
 
@@ -480,6 +499,7 @@ impl LayoutState {
     }
 
     pub fn update_custom_query(&mut self, query: Option<String>) {
+        self.set_dirty(true);
         let cc = self.get_active_connection_config().unwrap();
         let mut data = self.inner.write().unwrap();
         if let Some(query) = query {

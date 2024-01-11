@@ -1,14 +1,13 @@
 use crate::app::Application;
 use crossterm::event::Event;
-use ratatui::prelude::{Constraint, Line};
+use ratatui::prelude::{Constraint};
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
     text::Text,
-    widgets::{Block, Borders, Paragraph, Row, Table},
+    widgets::{Row, Table},
     Frame,
 };
-use std::collections::HashMap;
 use std::{sync::Arc, sync::RwLock};
 
 use crate::ui::state::LayoutState;
