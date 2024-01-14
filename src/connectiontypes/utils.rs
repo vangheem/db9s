@@ -1,3 +1,4 @@
+use super::mysql;
 use super::pg;
 use super::redis;
 use super::sqlite;
@@ -50,13 +51,17 @@ pub fn get_connection_type(
         return Ok(Box::new(sqlite::SQLiteConnectionType::new(
             conn, selections, query,
         )?));
+    } else if dsn.driver == "mysql" {
+        return Ok(Box::new(mysql::MySQLDatabase::new(
+            conn, selections, query,
+        )?));
     }
     Err(anyhow!("Unsupported DSN type"))
 }
 
 pub fn feature_supported(conn: Connection, window_type: WindowTypeID) -> Result<bool> {
     let dsn = Dsn::from_str(&conn.dsn)?;
-    if dsn.driver == "postgres" || dsn.driver == "postgresql" {
+    if dsn.driver == "postgres" || dsn.driver == "postgresql" || dsn.driver == "mysql" {
         return Ok(true); // all features supported
     } else if dsn.driver == "redis" {
         return Ok([

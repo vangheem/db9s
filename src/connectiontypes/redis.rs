@@ -45,7 +45,7 @@ impl base::ConnectionType for RedisConnectionType {
             keys = command.query(&mut con)?;
         }
 
-        if ["SCAN", "KEYS"].contains(&qs[0].to_uppercase().as_str()) {
+        if ["SCAN", "KEYS"].contains(&qs[0].to_uppercase().as_str()) && !keys.is_empty() {
             values = redis::cmd("MGET").arg(keys.as_slice()).query(&mut con)?;
         }
 

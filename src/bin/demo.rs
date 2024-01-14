@@ -1,14 +1,22 @@
 use anyhow::Result;
 use escuell::app;
 use escuell::data;
+use mysql;
+use mysql::prelude::*;
 use postgres;
 use rusqlite;
 
 fn main() -> Result<(), anyhow::Error> {
     let app = app::Application::new();
     let mut data = app.persistent_data.write().unwrap();
-    data.connections.clear();
-    data.connections.append(&mut vec![
+    let mut conns = vec![];
+    for conn in data.connections.iter() {
+        if ["postgres", "redis", "mysql", "sqlite", "elasticsearch"].contains(&conn.id.as_str()) {
+            continue;
+        }
+        conns.push(conn.clone());
+    }
+    conns.append(&mut vec![
         data::Connection::new_with_id(
             "Postgres".to_string(),
             "postgres://postgres:postgres@localhost:5432".to_string(),
@@ -21,7 +29,7 @@ fn main() -> Result<(), anyhow::Error> {
         ),
         data::Connection::new_with_id(
             "MySQL".to_string(),
-            "mysql://localhost:3306".to_string(),
+            "mysql://laravel:laravel@localhost:3306/laravel".to_string(),
             "mysql".to_string(),
         ),
         data::Connection::new_with_id(
@@ -35,6 +43,8 @@ fn main() -> Result<(), anyhow::Error> {
             "elasticsearch".to_string(),
         ),
     ]);
+    data.connections.clear();
+    data.connections.append(&mut conns);
     data.save();
 
     let mut postgres_client = postgres::Client::connect(
@@ -147,6 +157,34 @@ fn main() -> Result<(), anyhow::Error> {
         "INSERT INTO users (id, first, last) VALUES (5, 'John', 'Jones')",
         [],
     )?;
+
+    let mysql_url = "mysql://laravel:laravel@localhost:3306/laravel";
+    let mysql_pool = mysql::Pool::new(mysql_url)?;
+
+    let mut mysql_conn = mysql_pool.get_conn()?;
+
+    mysql_conn.query_drop("DROP TABLE IF EXISTS users")?;
+    mysql_conn.query_drop("DROP TABLE IF EXISTS posts")?;
+    mysql_conn.query_drop("CREATE TABLE users (id INT, first TEXT, last TEXT)")?;
+    mysql_conn.query_drop("CREATE TABLE posts (id INT, user_id INT, title TEXT)")?;
+    for i in 0..100 {
+        let id = i.clone();
+        let user_id = i % 10;
+
+        mysql_conn.query_drop(
+            format!(
+                "INSERT INTO posts (id, user_id, title) VALUES ({:?}, {:?}, 'Post {:?}')",
+                id, user_id, i
+            )
+            .as_str(),
+        )?;
+    }
+
+    mysql_conn.query_drop("INSERT INTO users (id, first, last) VALUES (1, 'John', 'Doe')")?;
+    mysql_conn.query_drop("INSERT INTO users (id, first, last) VALUES (2, 'Jane', 'Doe')")?;
+    mysql_conn.query_drop("INSERT INTO users (id, first, last) VALUES (3, 'John', 'Smith')")?;
+    mysql_conn.query_drop("INSERT INTO users (id, first, last) VALUES (4, 'Jane', 'Smith')")?;
+    mysql_conn.query_drop("INSERT INTO users (id, first, last) VALUES (5, 'John', 'Jones')")?;
 
     Ok(())
 }
