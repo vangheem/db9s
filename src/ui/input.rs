@@ -10,6 +10,7 @@ use ratatui::{
     Frame,
 };
 use ratatui_textarea::{CursorMove, TextArea};
+use std::cmp;
 use std::{sync::Arc, sync::RwLock};
 
 use crate::ui::state::LayoutState;
@@ -535,7 +536,19 @@ impl<'a> InputReceiver for EditQueryInputReceiver<'a> {
     }
 
     fn layout_size(&self) -> u16 {
-        5
+        cmp::max(
+            cmp::min(
+                self.state
+                    .read()
+                    .unwrap()
+                    .get_current_query()
+                    .split("\n")
+                    .collect::<Vec<_>>()
+                    .len() as u16,
+                30,
+            ),
+            5,
+        )
     }
 }
 

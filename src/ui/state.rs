@@ -374,6 +374,11 @@ impl LayoutState {
             .insert(self.inner.read().unwrap().active_window, pos);
     }
 
+    pub fn get_number_of_rows(&self) -> i32 {
+        let wd = self.get_window_data();
+        wd.rows.len() as i32
+    }
+
     pub fn change_window(&mut self, window: types::WindowTypeID) {
         self.set_dirty(true);
         let mut state = self.inner.write().unwrap();

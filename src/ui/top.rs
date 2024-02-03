@@ -22,9 +22,11 @@ pub struct TopArea {
     state: Arc<RwLock<LayoutState>>,
 }
 
-static SHORTCUTS: [(&str, &str); 13] = [
+static SHORTCUTS: [(&str, &str); 14] = [
     ("j", "Down"),
     ("k", "Up"),
+    ("Control-j", "Bottom"),
+    ("Control-k", "Top"),
     ("r", "Refresh"),
     ("space", "Select"),
     ("enter", "Open"),
@@ -33,7 +35,6 @@ static SHORTCUTS: [(&str, &str); 13] = [
     ("d", "Delete"),
     ("e", "Edit"),
     ("Esc", "Cancel"),
-    ("r", "Refresh"),
     ("Control+r", "Refresh"),
     ("Control+s", "Save"),
 ];

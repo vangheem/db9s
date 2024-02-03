@@ -21,9 +21,33 @@ impl MainArea {
     }
 
     fn handle_event(&mut self, event: Event) {
+        if let Event::Key(KeyEvent {
+            code: KeyCode::Char('j'),
+            modifiers: KeyModifiers::CONTROL,
+            ..
+        }) = event
+        {
+            let num_rows = self.state.read().unwrap().get_number_of_rows();
+            self.state
+                .write()
+                .unwrap()
+                .set_position(num_rows as i32 - 1);
+            log::debug!("Setting position to {}", num_rows - 1);
+            return;
+        }
+        if let Event::Key(KeyEvent {
+            code: KeyCode::Char('k'),
+            modifiers: KeyModifiers::CONTROL,
+            ..
+        }) = event
+        {
+            self.state.write().unwrap().set_position(0);
+            return;
+        }
+
         if let Event::Key(KeyEvent { code, .. }) = event {
             match code {
-                KeyCode::Char('j') => {
+                KeyCode::Char('j') | KeyCode::Down => {
                     let mut state = self.state.write().unwrap();
                     let current = state.get_position();
                     if current == -1 {
@@ -32,7 +56,7 @@ impl MainArea {
                         state.set_position(current + 1);
                     }
                 }
-                KeyCode::Char('k') => {
+                KeyCode::Char('k') | KeyCode::Up => {
                     let mut state = self.state.write().unwrap();
                     let current = state.get_position();
                     if current != -1 {
