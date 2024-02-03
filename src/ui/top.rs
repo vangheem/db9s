@@ -55,7 +55,7 @@ impl TopArea {
 
     fn get_shortcuts(&self, split: usize, part: usize) -> Table {
         // let current_window = self.state.read().unwrap().get_active_window();
-        let mut take = SHORTCUTS.len() / split;
+        let mut take = (SHORTCUTS.len() / split) + 1;
         let skip = take * part;
         if part == split - 1 {
             take += SHORTCUTS.len() % split;

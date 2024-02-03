@@ -1,5 +1,5 @@
-use escuell::app;
-use escuell::ui;
+use db9s::app;
+use db9s::ui;
 use fern;
 
 fn setup_logging() -> Result<(), fern::InitError> {

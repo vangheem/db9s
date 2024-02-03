@@ -1,6 +1,6 @@
 use anyhow::Result;
-use escuell::app;
-use escuell::data;
+use db9s::app;
+use db9s::data;
 use mysql;
 use mysql::prelude::*;
 use postgres;

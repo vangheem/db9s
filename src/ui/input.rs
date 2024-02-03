@@ -544,7 +544,8 @@ impl<'a> InputReceiver for EditQueryInputReceiver<'a> {
                     .get_current_query()
                     .split("\n")
                     .collect::<Vec<_>>()
-                    .len() as u16,
+                    .len() as u16
+                    + 1,
                 30,
             ),
             5,
