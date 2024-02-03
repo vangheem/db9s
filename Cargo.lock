@@ -505,6 +505,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "db9s"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "anyhow",
+ "chrono",
+ "crossterm",
+ "dirs",
+ "fern",
+ "log",
+ "mdsn",
+ "mysql",
+ "once_cell",
+ "postgres",
+ "ratatui",
+ "ratatui-textarea",
+ "rayon",
+ "redis",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "deranged"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -576,31 +601,6 @@ checksum = "a258e46cdc063eb8519c00b9fc845fc47bcfca4130e2f08e88665ceda8474245"
 dependencies = [
  "libc",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "escuell"
-version = "0.1.0"
-dependencies = [
- "anyerror",
- "anyhow",
- "chrono",
- "crossterm",
- "dirs",
- "fern",
- "log",
- "mdsn",
- "mysql",
- "once_cell",
- "postgres",
- "ratatui",
- "ratatui-textarea",
- "rayon",
- "redis",
- "rusqlite",
- "serde",
- "serde_json",
- "uuid",
 ]
 
 [[package]]

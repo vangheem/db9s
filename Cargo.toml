@@ -1,14 +1,14 @@
 [package]
-name = "escuell"
+name = "db9s"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "escuell"
+name = "db9s"
 path = "src/bin/ui.rs"
 
 [[bin]]
-name = "escuell-demo"
+name = "db9s-demo"
 path = "src/bin/demo.rs"
 
 [dependencies]

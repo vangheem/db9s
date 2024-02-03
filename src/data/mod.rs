@@ -23,7 +23,7 @@ pub struct PersistentData {
 
 fn get_settings_directory() -> PathBuf {
     let path = dirs::home_dir().unwrap();
-    let settings = path.join(".escuell");
+    let settings = path.join(".db9s");
     if !settings.exists() {
         std::fs::create_dir(&settings).unwrap();
     }
