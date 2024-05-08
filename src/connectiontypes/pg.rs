@@ -176,6 +176,9 @@ WHERE table_schema = $1 AND table_name = $2;"
         let rows: Vec<String> = raw_columns.iter().map(|r| r.get(0)).collect();
         Ok(rows)
     }
+    fn list_indexes(&self) -> Result<Vec<String>> {
+        Ok(vec![])
+    }
 }
 
 impl PostgreSQLDatabase {

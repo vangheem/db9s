@@ -67,6 +67,14 @@ impl CommandInputReceiver {
                 self.input.clear();
                 true
             }
+            ":indexes" => {
+                self.state
+                    .write()
+                    .unwrap()
+                    .change_window(types::WindowTypeID::INDEXES);
+                self.input.clear();
+                true
+            }
             ":query" => {
                 self.state
                     .write()
@@ -134,6 +142,8 @@ impl InputReceiver for CommandInputReceiver {
                     }
                     if ":tables".starts_with(&self.input) {
                         self.input = ":tables".to_string();
+                    } else if ":indexes".starts_with(&self.input) {
+                        self.input = ":indexes".to_string();
                     } else if ":connections".starts_with(&self.input) {
                         self.input = ":connections".to_string();
                     } else if ":query".starts_with(&self.input) {

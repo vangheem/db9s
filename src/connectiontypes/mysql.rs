@@ -155,6 +155,9 @@ impl base::ConnectionType for MySQLDatabase {
         })?;
         Ok(raw_columns)
     }
+    fn list_indexes(&self) -> Result<Vec<String>> {
+        Ok(vec![])
+    }
 }
 
 impl MySQLDatabase {

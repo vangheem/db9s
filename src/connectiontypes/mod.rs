@@ -1,4 +1,5 @@
 pub mod base;
+pub mod elasticsearch;
 pub mod mysql;
 pub mod pg;
 pub mod redis;

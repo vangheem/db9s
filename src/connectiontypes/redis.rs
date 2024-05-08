@@ -76,6 +76,9 @@ impl base::ConnectionType for RedisConnectionType {
     fn list_columns(&self) -> Result<Vec<String>> {
         Ok(vec![])
     }
+    fn list_indexes(&self) -> Result<Vec<String>> {
+        Ok(vec![])
+    }
 }
 
 impl RedisConnectionType {

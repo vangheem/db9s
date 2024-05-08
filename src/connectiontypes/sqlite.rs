@@ -134,6 +134,9 @@ impl base::ConnectionType for SQLiteConnectionType {
 
         Ok(results)
     }
+    fn list_indexes(&self) -> Result<Vec<String>> {
+        Ok(vec![])
+    }
 }
 
 impl SQLiteConnectionType {

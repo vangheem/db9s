@@ -1,3 +1,4 @@
+use super::elasticsearch;
 use super::mysql;
 use super::pg;
 use super::redis;
@@ -12,7 +13,14 @@ use std::{collections::HashMap, str::FromStr};
 
 use super::base::ConnectionType;
 
-const SUPPORTED_DRIVERS: [&str; 3] = ["postgres", "postgresql", "redis"];
+const SUPPORTED_DRIVERS: [&str; 6] = [
+    "postgres",
+    "postgresql",
+    "redis",
+    "sqlite",
+    "mysql",
+    "elasticsearch",
+];
 
 pub fn validate_dsn(raw_dsn: String) -> (bool, String) {
     let dsn = Dsn::from_str(&raw_dsn);
@@ -55,6 +63,10 @@ pub fn get_connection_type(
         return Ok(Box::new(mysql::MySQLDatabase::new(
             conn, selections, query,
         )?));
+    } else if dsn.driver == "elasticsearch" {
+        return Ok(Box::new(elasticsearch::ElasticSearchDatabase::new(
+            conn, selections, query,
+        )?));
     }
     Err(anyhow!("Unsupported DSN type"))
 }
@@ -75,6 +87,13 @@ pub fn feature_supported(conn: Connection, window_type: WindowTypeID) -> Result<
             WindowTypeID::CONNECTIONS,
             WindowTypeID::TABLES,
             WindowTypeID::COLUMNS,
+            WindowTypeID::QUERY,
+        ]
+        .contains(&window_type));
+    } else if dsn.driver == "elasticsearch" {
+        return Ok([
+            WindowTypeID::CONNECTIONS,
+            WindowTypeID::TABLES,
             WindowTypeID::QUERY,
         ]
         .contains(&window_type));

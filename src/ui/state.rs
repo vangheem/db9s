@@ -208,6 +208,21 @@ fn pull_data(state: Arc<RwLock<LayoutStateInner>>) -> Result<()> {
                 },
             );
         }
+        types::WindowTypeID::INDEXES => {
+            let db = state.read().unwrap().get_active_connection_type()?;
+            update_state(
+                state,
+                window,
+                WindowData {
+                    columns: vec!["Name".to_string()],
+                    rows: db
+                        .list_indexes()?
+                        .into_iter()
+                        .map(|idx| WindowDataRow::from_str(&idx))
+                        .collect(),
+                },
+            );
+        }
         types::WindowTypeID::SCHEMAS => {
             let db = state.read().unwrap().get_active_connection_type()?;
             update_state(
@@ -513,8 +528,12 @@ impl LayoutState {
     }
 
     pub fn update_custom_query(&mut self, query: Option<String>) {
+        let cc = self.get_active_connection_config();
+        if cc.is_err() {
+            return;
+        }
+        let cc = cc.unwrap();
         self.set_dirty(true);
-        let cc = self.get_active_connection_config().unwrap();
         let mut data = self.inner.write().unwrap();
         if let Some(query) = query {
             data.custom_queries.insert(cc.id.clone(), query);

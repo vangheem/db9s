@@ -41,4 +41,6 @@ pub trait ConnectionType: Send + Sync {
     fn list_databases(&self) -> Result<Vec<DatabaseInfo>>;
 
     fn list_columns(&self) -> Result<Vec<String>>;
+
+    fn list_indexes(&self) -> Result<Vec<String>>;
 }

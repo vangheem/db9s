@@ -21,6 +21,7 @@ pub enum WindowTypeID {
     COLUMNS,
     QUERY,
     HISTORY,
+    INDEXES,
 }
 
 #[derive(Clone, Debug)]
@@ -90,6 +91,7 @@ pub const WINDOW_ORDER: Lazy<HashMap<WindowTypeID, WindowTypeID>> = Lazy::new(||
     map.insert(WindowTypeID::TABLES, WindowTypeID::QUERY);
     map.insert(WindowTypeID::COLUMNS, WindowTypeID::QUERY);
     map.insert(WindowTypeID::HISTORY, WindowTypeID::QUERY);
+    map.insert(WindowTypeID::INDEXES, WindowTypeID::QUERY);
     map
 });
 
@@ -158,8 +160,16 @@ pub const HISTORY: Lazy<WindowType> = Lazy::new(|| {
         vec![],
     )
 });
+pub const INDEXES: Lazy<WindowType> = Lazy::new(|| {
+    WindowType::new(
+        WindowTypeID::INDEXES,
+        "Indexes".to_string(),
+        ItemSelectionType::SINGLE,
+        vec![],
+    )
+});
 
-pub const WINDOW_TYPES: [Lazy<WindowType>; 7] = [
+pub const WINDOW_TYPES: [Lazy<WindowType>; 8] = [
     CONNECTION_LIST,
     TABLE_LIST,
     QUERY,
@@ -167,6 +177,7 @@ pub const WINDOW_TYPES: [Lazy<WindowType>; 7] = [
     DATABASE_LIST,
     COLUMN_LIST,
     HISTORY,
+    INDEXES,
 ];
 
 pub fn get_window(id: WindowTypeID) -> WindowType {
